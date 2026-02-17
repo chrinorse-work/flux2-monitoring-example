@@ -2,26 +2,6 @@
 apiVersion: notification.toolkit.fluxcd.io/v1beta3
 kind: Alert
 metadata:
-  name: google-moniroting
-  namespace: monitoring
-spec:
-  providerRef:
-    name: google
-  eventMetadata:
-    summary: Changes made in monitoring ns
-    env: local-test
-    cluster: minikube
-    region: mg
-  eventSeverity: info
-  eventSources:
-    - kind: GitRepository
-      name: '*'
-    - kind: Kustomization
-      name: '*'
----
-apiVersion: notification.toolkit.fluxcd.io/v1beta3
-kind: Alert
-metadata:
   name: google-fluy-system
   namespace: flux-system
 spec:
