@@ -18,23 +18,3 @@ spec:
       name: '*'
     - kind: Kustomization
       name: '*'
----
-apiVersion: notification.toolkit.fluxcd.io/v1beta3
-kind: Alert
-metadata:
-  name: google-monitoring
-  namespace: monitoring
-spec:
-  providerRef:
-    name: google-monitoring
-  eventMetadata:
-    summary: Changes made in monitoring ns
-    env: local-test
-    cluster: minikube
-    region: mg
-  eventSeverity: info
-  eventSources:
-    - kind: GitRepository
-      name: '*'
-    - kind: Kustomization
-      name: '*'
