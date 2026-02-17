@@ -6,7 +6,7 @@ metadata:
   namespace: flux-system
 spec:
   providerRef:
-    name: google
+    name: google-flux-system
   eventMetadata:
     summary: Changes made in flux-system ns
     env: local-test
@@ -26,7 +26,7 @@ metadata:
   namespace: monitoring
 spec:
   providerRef:
-    name: google
+    name: google-monitoring
   eventMetadata:
     summary: Changes made in monitoring ns
     env: local-test
