@@ -2,11 +2,11 @@
 apiVersion: notification.toolkit.fluxcd.io/v1beta3
 kind: Alert
 metadata:
-  name: google-flux-system
+  name: google
   namespace: flux-system
 spec:
   providerRef:
-    name: google-flux-system
+    name: google
   eventMetadata:
     summary: Changes made in flux-system ns
     env: local-test

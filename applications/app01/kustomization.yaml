@@ -4,8 +4,6 @@ namespace: app01
 resources:
   - namespace.yaml
   - deployment.yaml
-  - alert-provider.yaml
-  - alerts.yaml
 labels:
   - pairs:
       toolkit.fluxcd.io/tenant: app01-team
