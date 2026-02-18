@@ -1,0 +1,233 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ghost.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:
+    {{- include "ghost.labels" . | nindent 4 }}
+  {{- with (include "ghost.annotations" .) }}
+  annotations:
+    {{- . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ghost.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ghost.selectorLabels" . | nindent 8 }}
+      annotations:
+        {{- with (include "ghost.annotations" .) }}
+        {{- . | nindent 8 }}
+        {{- end }}
+        {{- if or .Values.serverConfig .Values.streamServerConfig }}
+        checksum/server-configuration: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- end }}
+    spec:
+{{- with (include "ghost.imagePullSecrets" .) }}
+{{ . | nindent 6 }}
+{{- end }}
+      serviceAccountName: {{ include "ghost.serviceAccountName" . }}
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      securityContext: {{ include "cloudpirates.renderPodSecurityContext" . | nindent 8 }}
+      {{- if .Values.mariadb.enabled }}
+      initContainers:
+        - name: wait-for-mariadb
+          image: "{{ .Values.initContainers.waitForMariadb.image | default "mariadb:12.0.2" }}"
+          env:
+            {{- if .Values.mariadb.auth.existingSecret }}
+            - name: MARIADB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mariadb.auth.existingSecret }}
+                  key: username
+            - name: MARIADB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mariadb.auth.existingSecret }}
+                  key: mariadb-password
+            {{- else }}
+            - name: MARIADB_USER
+              value: {{ .Values.mariadb.auth.username | quote }}
+            - name: MARIADB_PASSWORD
+              value: {{ .Values.mariadb.auth.password | quote }}
+            {{- end }}
+          command:
+            - sh
+            - -c
+            - >
+              retries=0;
+              max_retries=15;
+              until [ $retries -ge $max_retries ] || mariadb-admin ping -h {{ include "ghost.fullname" . }}-mariadb
+              -P {{ .Values.mariadb.service.port }}
+              -u${MARIADB_USER}
+              -p${MARIADB_PASSWORD}
+              --silent; do
+                retries=$((retries+1));
+                echo "Waiting for MariaDB to become ready... (Attempt: $retries/$max_retries)";
+                if [ $retries -ge $max_retries ]; then
+                  echo "Maximum number of retries reached. Exiting.";
+                  exit 1;
+                fi;
+                sleep 2;
+              done;
+          securityContext: {{ include "cloudpirates.renderContainerSecurityContext" . | nindent 12 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext: {{ include "cloudpirates.renderContainerSecurityContext" . | nindent 12 }}
+          image: {{ include "ghost.image" . | quote }}
+          imagePullPolicy: {{ include "cloudpirates.imagePullPolicy" (dict "image" .Values.image) }}
+          #command: ["tail", "-f", "/dev/null"]
+          ports:
+            {{- range .Values.containerPorts }}
+            - name: {{ .name }}
+              containerPort: {{ .containerPort }}
+              protocol: {{ .protocol | default "TCP" }}
+            {{- end }}
+          env:
+            {{- if .Values.mariadb.enabled }}
+            {{- if .Values.mariadb.auth.existingSecret }}
+            - name: database__connection__user
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mariadb.auth.existingSecret }}
+                  key: username
+            - name: database__connection__password
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mariadb.auth.existingSecret }}
+                  key: mariadb-password
+            {{- else }}
+            - name: database__connection__user
+              value: {{ .Values.mariadb.auth.username | quote }}
+            - name: database__connection__password
+              value: {{ .Values.mariadb.auth.password | quote }}
+            {{- end }}
+            {{- else }}
+            {{- if .Values.config.database.externalConnection.existingSecret.name }}
+            - name: database__connection__user
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.database.externalConnection.existingSecret.name }}
+                  key: {{ .Values.config.database.externalConnection.existingSecret.usernameKey }}
+            - name: database__connection__password
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.database.externalConnection.existingSecret.name }}
+                  key: {{ .Values.config.database.externalConnection.existingSecret.passwordKey }}
+            {{- else }}
+            - name: database__connection__user
+              value: {{ .Values.config.database.externalConnection.user | quote }}
+            - name: database__connection__password
+              value: {{ .Values.config.database.externalConnection.password | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if .Values.config.mail.options.auth.existingSecret.name }}
+            - name: mail__options__auth__user
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.mail.options.auth.existingSecret.name }}
+                  key: {{ .Values.config.mail.options.auth.existingSecret.userKey }}
+            - name: mail__options__auth__pass
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.config.mail.options.auth.existingSecret.name }}
+                  key: {{ .Values.config.mail.options.auth.existingSecret.passKey }}
+            {{- else }}
+            - name: mail__options__auth__user
+              value: {{ .Values.config.mail.options.auth.user | quote }}
+            - name: mail__options__auth__pass
+              value: {{ .Values.config.mail.options.auth.pass | quote }}
+            {{- end }}
+            {{- if .Values.extraEnvVars }}
+              {{- with .Values.extraEnvVars }}
+{{- toYaml . | nindent 12 }}
+              {{- end }}
+            {{- end }}
+          {{- if .Values.livenessProbe.enabled }}
+          livenessProbe:
+            {{- if eq .Values.livenessProbe.type "httpGet" }}
+            httpGet:
+              path: {{ .Values.livenessProbe.path }}
+              port: {{ (index .Values.containerPorts 0).name }}
+            {{- else }}
+            tcpSocket:
+              port: {{ (index .Values.containerPorts 0).name }}
+            {{- end }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.livenessProbe.failureThreshold }}
+            successThreshold: {{ .Values.livenessProbe.successThreshold }}
+          {{- end }}
+          {{- if .Values.readinessProbe.enabled }}
+          readinessProbe:
+            {{- if eq .Values.readinessProbe.type "httpGet" }}
+            httpGet:
+              path: {{ .Values.readinessProbe.path }}
+              port: {{ (index .Values.containerPorts 0).name }}
+            {{- else }}
+            tcpSocket:
+              port: {{ (index .Values.containerPorts 0).name }}
+            {{- end }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+            successThreshold: {{ .Values.readinessProbe.successThreshold }}
+          {{- end }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: emptydir
+              mountPath: /tmp
+              subPath: tmp-dir
+            - name: data
+              mountPath: /var/lib/ghost/content
+            - name: ghost-config
+              mountPath: /var/lib/ghost/config.production.json
+              subPath: config.production.json
+          {{- if .Values.extraVolumeMounts }}
+            {{- toYaml .Values.extraVolumeMounts | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: emptydir
+          emptyDir: {}
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            {{- if .Values.persistence.existingClaim }}
+            claimName: {{ .Values.persistence.existingClaim }}
+            {{- else }}
+            claimName: {{ include "ghost.fullname" . }}
+            {{- end }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: ghost-config
+          configMap:
+            name: {{ include "ghost.fullname" . }}
+            items:
+              - key: config.production.json
+                path: config.production.json
+      {{- if .Values.extraVolumes }}
+      {{- toYaml .Values.extraVolumes | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

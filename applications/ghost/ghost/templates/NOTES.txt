@@ -1,0 +1,6 @@
+
+{{- if .Values.ingress.enabled }}
+URLS:
+ 1) Website: https://{{ (first .Values.ingress.hosts).host  }}
+ 2) Admin: {{ include "ghost.admin_url" . }}/ghost
+{{- end }}
