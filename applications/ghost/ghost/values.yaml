@@ -13,8 +13,7 @@ fullnameOverride: ""
 ## @param commonLabels Labels to add to all deployed objects
 commonLabels: {}
 ## @param commonAnnotations Annotations to add to all deployed objects
-commonAnnotations:
-  event.toolkit.fluxcd.io/summary: "ghost impacted"
+commonAnnotations: {}
 ## @param replicaCount Number of Nginx replicas to deploy
 replicaCount: 1
 
@@ -42,6 +41,9 @@ image:
 ##     protocol: TCP
 containerPorts:
   - name: http
+    containerPort: 2368
+    protocol: TCP
+  - name: https
     containerPort: 2368
     protocol: TCP
 
