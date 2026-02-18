@@ -63,6 +63,10 @@ service:
       targetPort: http
       protocol: TCP
       name: http
+    - port: 443
+      targetPort: https
+      protocol: TCP
+      name: https
 
 ## @section Ingress parameters
 ingress:
