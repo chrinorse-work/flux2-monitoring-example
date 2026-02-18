@@ -8,7 +8,6 @@ spec:
   providerRef:
     name: google
   eventMetadata:
-    summary: Changes made in flux-system ns
     env: local-test
     cluster: minikube
     region: mg

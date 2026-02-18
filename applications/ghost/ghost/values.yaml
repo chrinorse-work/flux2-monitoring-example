@@ -13,7 +13,8 @@ fullnameOverride: ""
 ## @param commonLabels Labels to add to all deployed objects
 commonLabels: {}
 ## @param commonAnnotations Annotations to add to all deployed objects
-commonAnnotations: {}
+commonAnnotations:
+  event.toolkit.fluxcd.io/summary: "ghost impacted"
 ## @param replicaCount Number of Nginx replicas to deploy
 replicaCount: 1
 
